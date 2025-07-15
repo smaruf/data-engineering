@@ -19,8 +19,7 @@ def fetch_binance_btcusdt():
             "price": float(data['price']),
             "timestamp": time.time()
         }
-    except Exception as e:
-        print(f"Error fetching Binance BTC/USDT: {e}")
+    except Exception:
         return None
 
 def fetch_coinbase_ethusd():
@@ -34,8 +33,7 @@ def fetch_coinbase_ethusd():
             "price": float(data['data']['amount']),
             "timestamp": time.time()
         }
-    except Exception as e:
-        print(f"Error fetching Coinbase ETH/USD: {e}")
+    except Exception:
         return None
 
 def fetch_forex_eurusd():
@@ -49,12 +47,10 @@ def fetch_forex_eurusd():
             "price": float(data['rates']['USD']),
             "timestamp": time.time()
         }
-    except Exception as e:
-        print(f"Error fetching Forex EUR/USD: {e}")
+    except Exception:
         return None
 
 def fetch_sample_trade_data():
-    # Simulated local money exchange trade data
     return {
         "market": "LocalMoneyExchange",
         "asset": "USD/BDT",
@@ -74,4 +70,4 @@ while True:
         if data is not None:
             producer.send('money-market', value=data)
             print(f"Produced: {data}")
-    time.sleep(5)  # Adjust interval as desired
+    time.sleep(600)  # 10 minutes interval
