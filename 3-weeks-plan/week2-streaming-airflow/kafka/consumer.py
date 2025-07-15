@@ -10,7 +10,7 @@ consumer = KafkaConsumer(
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
 
-DUMP_INTERVAL = 50  # Dump every 50 messages
+DUMP_INTERVAL = 1  # Dump after every message (since producer is every 10min)
 DUMP_FILENAME = 'memory_bootstrap.json'
 
 def dump_memory_to_json():
@@ -26,6 +26,3 @@ for message in consumer:
     msg_count += 1
     if msg_count % DUMP_INTERVAL == 0:
         dump_memory_to_json()
-
-# Optional: dump on exit
-# dump_memory_to_json()
