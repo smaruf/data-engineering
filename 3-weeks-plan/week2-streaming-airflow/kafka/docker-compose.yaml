@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=gemma
+
+  app:
+    build: .
+    depends_on:
+      - ollama
+    volumes:
+      - .:/app
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    ports:
+      - "8888:8888"
+
+volumes:
+  ollama:
