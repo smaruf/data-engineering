@@ -1,3 +1,6 @@
 kafka-python
 requests
+pandas
 matplotlib
+seaborn
+sqlite-utils
