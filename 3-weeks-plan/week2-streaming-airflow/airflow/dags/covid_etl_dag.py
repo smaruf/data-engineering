@@ -3,21 +3,28 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import requests
 import json
+import logging
+
+# Import the plotting function from covid_plotter.py
+from airflow.covid_plotter import plot_covid_data
 
 def extract_covid_data(**kwargs):
     url = "https://disease.sh/v3/covid-19/all"
-    response = requests.get(url)
-    if response.status_code == 200:
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
         data = response.json()
-        # Push to XCom for downstream tasks
         kwargs['ti'].xcom_push(key='covid_data', value=data)
-    else:
-        raise Exception("Failed to fetch COVID data")
+    except Exception as e:
+        logging.error(f"Failed to fetch COVID data: {e}")
+        raise
 
 def transform_covid_data(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(key='covid_data', task_ids='extract_covid_data')
-    # Example transformation: select only total cases, deaths, recovered
+    if not data:
+        logging.error("No data received from extract_covid_data")
+        raise ValueError("No data to transform")
     transformed = {
         'cases': data.get('cases'),
         'deaths': data.get('deaths'),
@@ -29,10 +36,16 @@ def transform_covid_data(**kwargs):
 def load_covid_data(**kwargs):
     ti = kwargs['ti']
     transformed = ti.xcom_pull(key='transformed_covid_data', task_ids='transform_covid_data')
-    # Example: save to file (you can adapt to save to DB, etc.)
-    with open('/tmp/covid_summary.json', 'w') as f:
-        json.dump(transformed, f)
-    print(f"Saved transformed data: {transformed}")
+    if not transformed:
+        logging.error("No transformed data for loading")
+        raise ValueError("No transformed data")
+    try:
+        with open('/tmp/covid_summary.json', 'w') as f:
+            json.dump(transformed, f)
+        print(f"Saved transformed data: {transformed}")
+    except Exception as e:
+        logging.error(f"Error saving transformed data: {e}")
+        raise
 
 default_args = {
     'owner': 'airflow',
