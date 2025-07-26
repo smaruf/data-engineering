@@ -67,4 +67,10 @@ with DAG(
         provide_context=True,
     )
 
-    extract >> transform >> load
+    plot = PythonOperator(
+        task_id='plot_covid_data',
+        python_callable=plot_covid_data,
+        provide_context=False,
+    )
+
+    extract >> transform >> load >> plot
