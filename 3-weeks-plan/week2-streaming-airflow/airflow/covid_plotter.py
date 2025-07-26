@@ -1,3 +1,19 @@
+"""
+COVID-19 Barcode Plot Generator
+
+This module generates barcode-style visualizations of COVID-19 metrics from daily data.
+It reads data from the COVID ETL DAG output and creates PNG plots with timestamp-based filenames.
+
+Usage:
+    python3 covid_plotter.py
+    
+Integration with DAG:
+    Can be called as a subsequent task after the COVID ETL DAG completes.
+    
+Output:
+    PNG files saved to /tmp/covid_barcode_<date>.png
+"""
+
 import json
 import matplotlib.pyplot as plt
 import numpy as np
