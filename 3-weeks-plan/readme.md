@@ -79,10 +79,17 @@ week3-cloud-etl/
 │   └── s3_redshift_setup.tf  
 └── README.md  
 
+### 🚀 How to Deploy  
+```bash
+cd week3-cloud-etl/terraform
+terraform init && terraform apply
+```
+
 ### 🌐 AWS Setup  
-- Create S3 bucket  
-- Deploy Glue job via console or boto3  
-- (Optional) Use Terraform for infra provisioning  
+- S3 buckets for raw and processed data  
+- AWS Glue job with PySpark transformation  
+- IAM roles and policies  
+- (Optional) Redshift cluster via Terraform  
 
 ---
 
