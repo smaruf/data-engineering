@@ -1,0 +1,65 @@
+# Core Data Engineering Dependencies
+requests>=2.28.0
+pandas>=1.5.0
+numpy>=1.23.0
+sqlalchemy>=1.4.0
+psycopg2-binary>=2.9.0
+
+# Configuration and Utilities
+configparser>=5.3.0
+python-dotenv>=0.19.0
+pyyaml>=6.0
+
+# Streaming and Messaging
+kafka-python>=2.0.2
+confluent-kafka>=1.9.0
+
+# Data Visualization and Analysis
+matplotlib>=3.6.0
+seaborn>=0.12.0
+plotly>=5.11.0
+
+# Database and Storage
+sqlite-utils>=3.28
+redis>=4.3.0
+
+# Testing
+pytest>=7.1.0
+pytest-cov>=4.0.0
+pytest-mock>=3.8.0
+
+# Development Tools
+black>=22.0.0
+flake8>=5.0.0
+pre-commit>=2.20.0
+
+# Airflow (Optional - for Phase 2)
+# apache-airflow>=2.4.0
+# apache-airflow-providers-postgres>=5.2.0
+
+# AWS SDK (for Phase 3)
+boto3>=1.26.0
+botocore>=1.29.0
+
+# PySpark (for Phase 3)
+pyspark>=3.3.0
+
+# Monitoring and Logging
+structlog>=22.1.0
+prometheus-client>=0.14.0
+
+# Data Quality
+great-expectations>=0.15.0
+
+# HTTP and Web
+flask>=2.2.0
+fastapi>=0.85.0
+uvicorn>=0.18.0
+
+# Date and Time
+pendulum>=2.1.0
+
+# Misc Utilities
+click>=8.1.0
+tqdm>=4.64.0
+schedule>=1.1.0
