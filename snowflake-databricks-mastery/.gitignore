@@ -1,0 +1,124 @@
+# Snowflake and Databricks Mastery - .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Data files (sample data is OK, but not large datasets)
+data/large/
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.json
+!data/sample_csv/*.csv
+!data/sample_json/*.json
+!data/sample_parquet/*.parquet
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Output files
+output/
+results/
+
+# Spark
+derby.log
+metastore_db/
+spark-warehouse/
+
+# Databricks
+.databricks/
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Documentation builds
+docs/_build/
+
+# Package files
+*.tar.gz
+*.zip
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Snowflake
+*.sf
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/

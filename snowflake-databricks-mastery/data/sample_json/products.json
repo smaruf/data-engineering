@@ -1,0 +1,46 @@
+[
+  {
+    "product_id": 1,
+    "product_name": "Laptop Pro 15",
+    "category": "Electronics",
+    "price": 1299.99,
+    "specifications": {
+      "brand": "TechCorp",
+      "ram": "16GB",
+      "storage": "512GB SSD",
+      "screen": "15.6 inch",
+      "processor": "Intel i7"
+    },
+    "in_stock": true,
+    "tags": ["laptop", "professional", "high-performance"]
+  },
+  {
+    "product_id": 2,
+    "product_name": "Wireless Mouse",
+    "category": "Accessories",
+    "price": 29.99,
+    "specifications": {
+      "brand": "TechCorp",
+      "wireless": true,
+      "battery": "AA batteries",
+      "buttons": 5
+    },
+    "in_stock": true,
+    "tags": ["mouse", "wireless", "ergonomic"]
+  },
+  {
+    "product_id": 3,
+    "product_name": "4K Monitor",
+    "category": "Electronics",
+    "price": 599.99,
+    "specifications": {
+      "brand": "DisplayMax",
+      "resolution": "3840x2160",
+      "size": "27 inch",
+      "refresh_rate": "60Hz",
+      "panel_type": "IPS"
+    },
+    "in_stock": false,
+    "tags": ["monitor", "4k", "display"]
+  }
+]
