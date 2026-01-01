@@ -10,7 +10,9 @@ This module provides common utilities used across examples:
 """
 
 import os
-import logging
+import sys
+import time
+from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 from datetime import datetime
 import json
@@ -185,7 +187,6 @@ if __name__ == "__main__":
     
     # Test timer
     with Timer("Sample operation"):
-        import time
         time.sleep(2)
     
     print("\n✅ All utility tests completed!")

@@ -21,7 +21,7 @@ import os
 import sys
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit, current_timestamp
+from pyspark.sql.functions import col, lit, current_timestamp, avg, count, min, max, sum
 from typing import Optional
 
 # Load environment variables
@@ -257,8 +257,6 @@ def example_4_aggregations():
          .show()
         
         # Using functions
-        from pyspark.sql.functions import avg, count, min, max, sum
-        
         print("\n📊 Detailed Department Statistics:")
         df.groupBy("department").agg(
             count("*").alias("employees"),

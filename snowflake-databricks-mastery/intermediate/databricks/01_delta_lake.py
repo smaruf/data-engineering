@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, current_timestamp, lit
 from delta import configure_spark_with_delta_pip
+from delta.tables import DeltaTable
 
 # Load environment variables
 load_dotenv()
@@ -106,8 +107,6 @@ def example_2_acid_transactions():
         print("   ✅ Transaction committed")
         
         # Concurrent write 2: Update salary
-        from delta.tables import DeltaTable
-        
         delta_table = DeltaTable.forPath(spark, delta_path)
         
         print("\n📝 Updating salaries (Transaction 2)...")
@@ -135,8 +134,6 @@ def example_3_time_travel():
     spark = create_delta_session()
     
     try:
-        from delta.tables import DeltaTable
-        
         delta_path = "/tmp/delta_learning/employees"
         delta_table = DeltaTable.forPath(spark, delta_path)
         
@@ -211,8 +208,6 @@ def example_5_merge_upsert():
     spark = create_delta_session()
     
     try:
-        from delta.tables import DeltaTable
-        
         delta_path = "/tmp/delta_learning/employees"
         delta_table = DeltaTable.forPath(spark, delta_path)
         
