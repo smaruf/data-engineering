@@ -1,0 +1,11 @@
+id,name,department,salary,hire_date,is_active
+1,John Doe,Engineering,95000.00,2023-01-15,true
+2,Jane Smith,Engineering,105000.00,2023-02-01,true
+3,Bob Johnson,Sales,75000.00,2023-03-10,true
+4,Alice Williams,Marketing,80000.00,2023-04-05,true
+5,Charlie Brown,Engineering,92000.00,2023-05-20,true
+6,Diana Prince,Sales,78000.00,2023-06-12,true
+7,Frank Castle,IT,88000.00,2023-07-08,true
+8,Grace Hopper,Engineering,110000.00,2023-08-15,true
+9,Henry Ford,Finance,95000.00,2023-09-01,false
+10,Ivy League,Marketing,82000.00,2023-10-10,true
