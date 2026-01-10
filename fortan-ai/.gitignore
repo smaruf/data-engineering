@@ -1,0 +1,26 @@
+# Fortran build artifacts
+*.o
+*.mod
+*.smod
+*.a
+*.so
+*.exe
+
+# Build directory
+bin/
+build/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
