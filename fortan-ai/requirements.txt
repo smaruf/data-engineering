@@ -1,0 +1,67 @@
+# Required Tools and Libraries
+
+## Compiler
+- gfortran (GCC 9.0 or later)
+- OR ifort (Intel Fortran Compiler)
+
+## Build Tools
+- make (GNU Make or compatible)
+
+## Optional Libraries
+
+### For Optimized Linear Algebra
+- OpenBLAS
+- Intel MKL (Math Kernel Library)
+- LAPACK
+
+### For Visualization
+- gnuplot (for plotting results)
+- matplotlib with f2py (for Python integration)
+
+## Installation Instructions
+
+### Ubuntu/Debian
+```bash
+sudo apt-get update
+sudo apt-get install gfortran make
+sudo apt-get install libopenblas-dev  # Optional
+sudo apt-get install gnuplot  # Optional
+```
+
+### macOS
+```bash
+brew install gcc make
+brew install openblas  # Optional
+brew install gnuplot  # Optional
+```
+
+### Windows
+- Install MinGW-w64 or MSYS2
+- OR use Windows Subsystem for Linux (WSL)
+
+## Verifying Installation
+
+```bash
+gfortran --version
+make --version
+```
+
+## Optional: Parallel Computing
+
+### OpenMP (usually included with compiler)
+```bash
+gfortran -fopenmp program.f90
+```
+
+### MPI (for distributed computing)
+```bash
+sudo apt-get install mpich  # Or openmpi
+```
+
+## Python Integration (Optional)
+
+For using Fortran code from Python:
+```bash
+pip install numpy
+# f2py usually comes with NumPy
+```
