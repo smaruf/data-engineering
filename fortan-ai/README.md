@@ -235,6 +235,7 @@ make all
 make beginner    # Build beginner examples
 make intermediate # Build intermediate examples
 make advanced    # Build advanced examples
+make ml          # Build machine learning examples
 ```
 
 ### Run Examples

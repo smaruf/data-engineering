@@ -90,6 +90,9 @@ fortan-ai/
 # Build all examples
 make all
 
+# Build machine learning examples
+make ml
+
 # Run beginner examples
 ./bin/hello_ai
 ./bin/linear_regression
