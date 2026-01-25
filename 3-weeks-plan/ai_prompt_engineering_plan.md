@@ -494,7 +494,23 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Document:
-    """Document with metadata"""
+    """
+    Document representation with embeddings and metadata.
+    
+    Attributes:
+        id: Unique identifier for the document
+        content: Text content of the document
+        metadata: Additional metadata (file path, type, etc.)
+        embedding: Vector embedding for similarity search (optional)
+        score: Similarity score from search results (optional)
+    
+    Example:
+        doc = Document(
+            id="doc1",
+            content="Python ETL code example",
+            metadata={"file": "etl.py", "type": "code"}
+        )
+    """
     id: str
     content: str
     metadata: Dict
@@ -513,15 +529,41 @@ class DeterministicRAGSystem:
     - Version tracking
     """
     
-    def __init__(self, vector_store, llm_service, cache_service, version: str = "1.0.0"):
+    # Configuration constants
+    DEFAULT_TEMPERATURE_DETERMINISTIC = 0.0
+    DEFAULT_TEMPERATURE_CREATIVE = 0.7
+    DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
+    
+    def __init__(
+        self, 
+        vector_store, 
+        llm_service, 
+        cache_service, 
+        version: str = "1.0.0",
+        cache_ttl: int = DEFAULT_CACHE_TTL
+    ):
         self.vector_store = vector_store
         self.llm_service = llm_service
         self.cache = cache_service
         self.version = version
+        self.cache_ttl = cache_ttl
     
     def _generate_cache_key(self, query: str, k: int, deterministic: bool) -> str:
-        """Generate deterministic cache key"""
-        key_components = f"{query}:{k}:{deterministic}:{self.version}"
+        """
+        Generate deterministic cache key with input validation.
+        
+        Note: For production, consider additional validation to prevent
+        hash collision attacks or issues with special characters.
+        """
+        # Basic input validation
+        if not query or not isinstance(query, str):
+            raise ValueError("Query must be a non-empty string")
+        if k <= 0:
+            raise ValueError("k must be a positive integer")
+        
+        # Sanitize and normalize query for consistent hashing
+        normalized_query = query.strip().lower()
+        key_components = f"{normalized_query}:{k}:{deterministic}:{self.version}"
         return hashlib.sha256(key_components.encode()).hexdigest()
     
     def query(
@@ -565,8 +607,11 @@ class DeterministicRAGSystem:
             # Generate prompt
             prompt = self._build_prompt(question, context)
             
-            # Generate answer
-            temperature = 0.0 if deterministic else 0.7
+            # Generate answer with configured temperature
+            temperature = (
+                self.DEFAULT_TEMPERATURE_DETERMINISTIC if deterministic 
+                else self.DEFAULT_TEMPERATURE_CREATIVE
+            )
             answer = self.llm_service.generate(
                 prompt=prompt,
                 temperature=temperature
@@ -595,9 +640,13 @@ class DeterministicRAGSystem:
                     for doc in documents
                 ]
             
-            # Cache result
+            # Cache result with configured TTL
             if use_cache:
-                self.cache.set(cache_key, json.dumps(result), ex=3600)
+                self.cache.set(
+                    cache_key, 
+                    json.dumps(result), 
+                    ex=self.cache_ttl
+                )
             
             return result
             
