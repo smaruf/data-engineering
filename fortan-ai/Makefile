@@ -9,7 +9,7 @@ BINDIR = bin
 SRCDIR = src
 
 # Targets
-.PHONY: all clean beginner intermediate advanced applications examples help test
+.PHONY: all clean beginner intermediate advanced applications examples help test ml
 
 all: beginner examples
 
@@ -23,6 +23,7 @@ help:
 	@echo "  advanced     - Build advanced examples"
 	@echo "  applications - Build real-world applications"
 	@echo "  examples     - Build complete examples"
+	@echo "  ml           - Build machine learning examples"
 	@echo "  clean        - Remove all built files"
 	@echo "  test         - Run basic tests"
 	@echo "  help         - Show this help message"
@@ -68,6 +69,10 @@ advanced: $(BINDIR)
 # Applications (placeholder for now)
 applications: $(BINDIR)
 	@echo "Applications ready to build"
+
+# Machine Learning target - builds ML-focused examples
+ml: beginner examples
+	@echo "Machine Learning examples built successfully!"
 
 # Examples
 examples: $(BINDIR) $(BINDIR)/example_01_simple_nn
