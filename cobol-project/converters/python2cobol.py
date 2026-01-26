@@ -323,9 +323,13 @@ for i in range(1, 5):
     
     # Output
     if args.output:
-        with open(args.output, 'w') as f:
-            f.write(cobol_code)
-        print(f"Conversion successful! Output written to {args.output}")
+        try:
+            with open(args.output, 'w') as f:
+                f.write(cobol_code)
+            print(f"Conversion successful! Output written to {args.output}")
+        except IOError as e:
+            print(f"Error: Cannot write to file '{args.output}': {e}")
+            sys.exit(1)
     else:
         print(cobol_code)
 
