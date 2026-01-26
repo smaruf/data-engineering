@@ -38,6 +38,7 @@ $(BINDIR):
 # Beginner Level
 beginner: $(BINDIR) \
 	$(BINDIR)/hello_ai \
+	$(BINDIR)/ai_learning_fundamentals \
 	$(BINDIR)/linear_regression \
 	$(BINDIR)/perceptron \
 	$(BINDIR)/logistic_regression
@@ -45,6 +46,10 @@ beginner: $(BINDIR) \
 $(BINDIR)/hello_ai: $(SRCDIR)/01-beginner/hello_ai.f90
 	$(FC) $(FFLAGS) -o $@ $<
 	@echo "Built: hello_ai"
+
+$(BINDIR)/ai_learning_fundamentals: $(SRCDIR)/01-beginner/ai_learning_fundamentals.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: ai_learning_fundamentals"
 
 $(BINDIR)/linear_regression: $(SRCDIR)/01-beginner/linear_regression.f90
 	$(FC) $(FFLAGS) -o $@ $<
@@ -59,7 +64,18 @@ $(BINDIR)/logistic_regression: $(SRCDIR)/01-beginner/logistic_regression.f90
 	@echo "Built: logistic_regression"
 
 # Intermediate Level - Neural Networks
-intermediate: $(BINDIR) $(BINDIR)/neural_network
+intermediate: $(BINDIR) \
+	$(BINDIR)/gradient_descent \
+	$(BINDIR)/backpropagation \
+	$(BINDIR)/neural_network
+
+$(BINDIR)/gradient_descent: $(SRCDIR)/02-intermediate/gradient_descent.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: gradient_descent"
+
+$(BINDIR)/backpropagation: $(SRCDIR)/02-intermediate/backpropagation.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: backpropagation"
 
 $(BINDIR)/neural_network: $(SRCDIR)/02-intermediate/neural_network.f90
 	$(FC) $(FFLAGS) -o $@ $<
@@ -95,8 +111,8 @@ ml: beginner intermediate advanced applications examples
 	@echo "======================================"
 	@echo "All Machine Learning examples built!"
 	@echo "======================================"
-	@echo "Beginner: Linear Regression, Perceptron, Logistic Regression"
-	@echo "Intermediate: Neural Networks"
+	@echo "Beginner: AI Learning Fundamentals, Linear Regression, Perceptron, Logistic Regression"
+	@echo "Intermediate: Gradient Descent, Backpropagation, Neural Networks"
 	@echo "Advanced: Deep NN, GAN, ADAM Optimizer"
 	@echo "Applications: Market Predictor (Time Series)"
 	@echo "======================================"
