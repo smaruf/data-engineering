@@ -148,6 +148,7 @@ make all
 
 # Build specific level
 make beginner
+make ml          # Build ML examples
 
 # Run tests
 make test
