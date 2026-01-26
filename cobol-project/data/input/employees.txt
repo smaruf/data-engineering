@@ -1,0 +1,5 @@
+100001 John Smith                     0075000.00 Engineering         
+100002 Jane Doe                       0085000.50 Marketing           
+100003 Robert Johnson                 0095000.00 Sales               
+100004 Maria Garcia                   0065000.00 Human Resources     
+100005 David Lee                      0070000.75 IT Department       

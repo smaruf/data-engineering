@@ -80,20 +80,35 @@ Project for learning data engineering as a professional
 
 ## Project Structure
 
-This repository will be organized to support the 3-month learning plan:
+This repository contains various data engineering projects and learning resources:
 
 ```
-├── month-1-python-sql-etl/
-│   ├── pandas-exercises/
-│   ├── sql-practice/
-│   └── etl-projects/
-├── month-2-spark-airflow/
-│   ├── spark-jobs/
-│   └── airflow-dags/
-├── month-3-cloud-streaming/
-│   ├── aws-projects/
-│   └── kafka-streaming/
-└── resources/
-    ├── datasets/
-    └── documentation/
+├── 3-weeks-plan/              # 3-week intensive data engineering plan
+│   ├── week1-batch-etl/
+│   ├── week2-streaming-airflow/
+│   └── week3-cloud-etl/
+├── full-phased-project/       # Comprehensive phased data engineering project
+│   ├── phase1-batch-etl/
+│   ├── phase2-streaming-orchestration/
+│   └── phase3-cloud-pipeline/
+├── cobol-project/             # Production-ready COBOL project with converters
+│   ├── src/                   # COBOL source programs
+│   ├── converters/            # Python ↔ COBOL conversion tools
+│   ├── examples/              # Example programs
+│   └── docs/                  # Comprehensive documentation
+├── fortan-ai/                 # Fortran AI project
+├── snowflake-databricks-mastery/  # Cloud data warehouse projects
+└── README.md
 ```
+
+## Featured Projects
+
+### 🔷 COBOL Project - Legacy Meets Modern
+
+A comprehensive COBOL project featuring:
+- **5 Production-Ready COBOL Programs** demonstrating different COBOL features
+- **Bidirectional Converters**: Python ↔ COBOL conversion tools
+- **Complete Documentation**: COBOL features guide and conversion guide
+- **Example Programs**: Ready-to-use examples for learning
+
+**[➡️ Explore COBOL Project](cobol-project/)**
