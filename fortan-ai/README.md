@@ -143,7 +143,7 @@ make all
 ### Level 2: Intermediate (Weeks 3-4)
 **Goal**: Implement neural networks and understand backpropagation
 
-1. **Neural Network** - Multi-layer perceptron implementation
+1. **Neural Network** - Multi-layer perceptron implementation ✅
 2. **Gradient Descent** - Optimization algorithms
 3. **Backpropagation** - Training neural networks
 4. **Activation Functions** - ReLU, Sigmoid, Tanh, Softmax
@@ -153,22 +153,22 @@ make all
 ### Level 3: Advanced (Weeks 5-6)
 **Goal**: Build deep learning models and advanced architectures
 
-1. **Deep Neural Networks** - Networks with multiple hidden layers
-2. **Convolutional Neural Networks** - Image processing with CNNs
-3. **ADAM Optimizer** - Advanced optimization techniques
+1. **Deep Neural Networks** - Networks with multiple hidden layers ✅
+2. **Generative Adversarial Networks (GAN)** - Generate synthetic data ✅
+3. **ADAM Optimizer** - Advanced optimization techniques ✅
 4. **Batch Normalization** - Improving training stability
 
-**Key Concepts**: Object-oriented programming, optimization, regularization
+**Key Concepts**: Object-oriented programming, optimization, regularization, GANs
 
 ### Level 4: Expert (Weeks 7-8)
 **Goal**: Apply knowledge to real-world problems and optimize performance
 
-1. **MNIST Classification** - Handwritten digit recognition
-2. **Iris Classification** - Multi-class classification
+1. **Market Data Predictor** - Time series prediction with LSTM-style networks ✅
+2. **Online Data Feeds** - Real-time data processing capabilities ✅
 3. **Time Series Prediction** - Sequential data processing
 4. **Parallel Computing** - Using OpenMP/MPI for distributed training
 
-**Key Concepts**: Real datasets, performance optimization, parallel programming
+**Key Concepts**: Real datasets, market data, performance optimization, parallel programming
 
 ## 💻 Examples
 

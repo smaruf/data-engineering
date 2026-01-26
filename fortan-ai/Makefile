@@ -58,21 +58,48 @@ $(BINDIR)/logistic_regression: $(SRCDIR)/01-beginner/logistic_regression.f90
 	$(FC) $(FFLAGS) -o $@ $<
 	@echo "Built: logistic_regression"
 
-# Intermediate Level (placeholder for now)
-intermediate: $(BINDIR)
-	@echo "Intermediate examples ready to build"
+# Intermediate Level - Neural Networks
+intermediate: $(BINDIR) $(BINDIR)/neural_network
 
-# Advanced Level (placeholder for now)
-advanced: $(BINDIR)
-	@echo "Advanced examples ready to build"
+$(BINDIR)/neural_network: $(SRCDIR)/02-intermediate/neural_network.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: neural_network"
 
-# Applications (placeholder for now)
-applications: $(BINDIR)
-	@echo "Applications ready to build"
+# Advanced Level - Deep Learning
+advanced: $(BINDIR) \
+	$(BINDIR)/deep_neural_network \
+	$(BINDIR)/gan_network \
+	$(BINDIR)/optimizer_adam
 
-# Machine Learning target - builds ML-focused examples
-ml: beginner examples
-	@echo "Machine Learning examples built successfully!"
+$(BINDIR)/deep_neural_network: $(SRCDIR)/03-advanced/deep_neural_network.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: deep_neural_network"
+
+$(BINDIR)/gan_network: $(SRCDIR)/03-advanced/gan_network.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: gan_network"
+
+$(BINDIR)/optimizer_adam: $(SRCDIR)/03-advanced/optimizer_adam.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: optimizer_adam"
+
+# Applications - Real-world ML
+applications: $(BINDIR) $(BINDIR)/market_predictor
+
+$(BINDIR)/market_predictor: $(SRCDIR)/04-applications/market_predictor.f90
+	$(FC) $(FFLAGS) -o $@ $<
+	@echo "Built: market_predictor"
+
+# Machine Learning target - builds all ML examples including advanced techniques
+ml: beginner intermediate advanced applications examples
+	@echo "======================================"
+	@echo "All Machine Learning examples built!"
+	@echo "======================================"
+	@echo "Beginner: Linear Regression, Perceptron, Logistic Regression"
+	@echo "Intermediate: Neural Networks"
+	@echo "Advanced: Deep NN, GAN, ADAM Optimizer"
+	@echo "Applications: Market Predictor (Time Series)"
+	@echo "======================================"
 
 # Examples
 examples: $(BINDIR) $(BINDIR)/example_01_simple_nn
