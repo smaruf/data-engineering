@@ -91,6 +91,13 @@ This repository contains various data engineering projects and learning resource
 │   ├── phase1-batch-etl/
 │   ├── phase2-streaming-orchestration/
 │   └── phase3-cloud-pipeline/
+├── basic-statistics/          # Production-ready statistics with Python+Fortran
+│   ├── src/                   # Python and Fortran implementations
+│   ├── docs/                  # Theory, theorems, and guides
+│   ├── examples/              # Real-world use cases
+│   ├── tests/                 # Comprehensive test suite
+│   ├── api/                   # FastAPI service
+│   └── docker/                # Production deployment
 ├── cobol-project/             # Production-ready COBOL project with converters
 │   ├── src/                   # COBOL source programs
 │   ├── converters/            # Python ↔ COBOL conversion tools
@@ -102,6 +109,18 @@ This repository contains various data engineering projects and learning resource
 ```
 
 ## Featured Projects
+
+### 📊 Basic Statistics - Production-Ready Statistical Computing
+
+A comprehensive statistics project featuring:
+- **Dual Implementation**: Python (flexible) + Fortran (performance)
+- **Complete Theory**: Statistical theorems with proofs
+- **Real Use Cases**: A/B testing, quality control, market analysis
+- **Big Data Ready**: Spark integration, distributed computing
+- **Production API**: FastAPI service with Docker deployment
+- **Fully Tested**: 28+ unit tests, property-based testing
+
+**[➡️ Explore Statistics Project](basic-statistics/)**
 
 ### 🔷 COBOL Project - Legacy Meets Modern
 
