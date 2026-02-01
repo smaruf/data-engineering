@@ -1,0 +1,104 @@
+# Core Python Data Engineering
+pyspark>=3.5.0
+delta-spark>=3.0.0
+pandas>=2.1.0
+numpy>=1.26.0
+pyarrow>=14.0.0
+
+# Azure SDK - Storage
+azure-storage-blob>=12.19.0
+azure-storage-file-datalake>=12.14.0
+azure-storage-queue>=12.9.0
+
+# Azure SDK - Identity and Authentication
+azure-identity>=1.15.0
+azure-keyvault-secrets>=4.7.0
+
+# Azure SDK - Data Services
+azure-cosmos>=4.5.1
+azure-mgmt-datafactory>=6.0.0
+azure-mgmt-synapse>=2.1.0
+azure-mgmt-resource>=23.0.1
+azure-mgmt-storage>=21.1.0
+
+# Azure SDK - Event Streaming
+azure-eventhub>=5.11.5
+azure-eventhub-checkpointstoreblob-aio>=1.1.4
+
+# Azure SDK - Monitoring and Management
+azure-monitor-query>=1.2.0
+azure-mgmt-monitor>=6.0.2
+
+# Databricks
+databricks-sdk>=0.18.0
+databricks-cli>=0.18.0
+
+# Apache Kafka
+kafka-python>=2.0.2
+confluent-kafka>=2.3.0
+
+# NoSQL Databases
+pymongo>=4.6.0
+redis>=5.0.1
+
+# Data Quality and Validation
+great-expectations>=0.18.0
+pydantic>=2.5.0
+
+# Testing
+pytest>=7.4.3
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+pytest-asyncio>=0.21.1
+moto>=4.2.9  # AWS mocking for testing
+
+# Code Quality
+black>=23.12.0
+flake8>=6.1.0
+pylint>=3.0.3
+mypy>=1.7.1
+isort>=5.13.2
+
+# Documentation
+sphinx>=7.2.6
+sphinx-rtd-theme>=2.0.0
+
+# Jupyter and Notebooks
+jupyterlab>=4.0.9
+notebook>=7.0.6
+ipykernel>=6.27.1
+
+# Utilities
+python-dotenv>=1.0.0
+click>=8.1.7
+pyyaml>=6.0.1
+requests>=2.31.0
+tqdm>=4.66.1
+
+# MLflow for ML pipelines
+mlflow>=2.9.0
+scikit-learn>=1.3.2
+
+# Data Visualization
+matplotlib>=3.8.2
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# Performance and Profiling
+memory-profiler>=0.61.0
+line-profiler>=4.1.1
+
+# Scheduling and Workflow
+schedule>=1.2.0
+croniter>=2.0.1
+
+# Configuration Management
+configparser>=6.0.0
+toml>=0.10.2
+
+# Logging
+loguru>=0.7.2
+
+# Type Hints
+types-requests>=2.31.0.10
+types-PyYAML>=6.0.12.12
