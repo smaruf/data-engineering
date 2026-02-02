@@ -1,0 +1,395 @@
+stages:
+  # Development Deployment
+  - stage: Deploy_Dev
+    displayName: 'Deploy to Development'
+    dependsOn: Test
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+    jobs:
+      - deployment: DeployAzureDev
+        displayName: 'Deploy to Azure Dev'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'development'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Azure Login'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az account show
+                      az group create --name $(DEV_RESOURCE_GROUP) --location $(AZURE_LOCATION) || true
+
+                - task: TerraformInstaller@0
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Init'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'init'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    backendServiceArm: '$(AZURE_SERVICE_CONNECTION)'
+                    backendAzureRmResourceGroupName: '$(TERRAFORM_STATE_RG)'
+                    backendAzureRmStorageAccountName: '$(TERRAFORM_STATE_SA)'
+                    backendAzureRmContainerName: 'tfstate'
+                    backendAzureRmKey: 'dev.terraform.tfstate'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Plan'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'plan'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    commandOptions: '-var="environment=dev" -out=tfplan'
+                    environmentServiceNameAzureRM: '$(AZURE_SERVICE_CONNECTION)'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Apply'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'apply'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    commandOptions: 'tfplan'
+                    environmentServiceNameAzureRM: '$(AZURE_SERVICE_CONNECTION)'
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy Python App to Azure Web App'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      if [ -f "$(Pipeline.Workspace)/python-artifacts/dist/"*.whl ]; then
+                        az webapp deployment source config-zip \
+                          --resource-group $(DEV_RESOURCE_GROUP) \
+                          --name $(DEV_WEBAPP_NAME) \
+                          --src $(Pipeline.Workspace)/python-artifacts/dist/*.whl || true
+                      fi
+
+      - deployment: DeployFabricDev
+        displayName: 'Deploy to Microsoft Fabric Dev'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'fabric-development'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: '$(pythonVersion)'
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy Fabric Notebooks'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      pip install azure-identity msfabricpysdkcore
+                      
+                      python scripts/deploy_fabric_notebooks.py \
+                        --workspace $(DEV_FABRIC_WORKSPACE) \
+                        --environment dev \
+                        --notebooks-path microsoft-fabric/
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy Fabric Pipelines'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      if [ -d "microsoft-fabric/pipelines" ]; then
+                        python scripts/deploy_fabric_pipelines.py \
+                          --workspace $(DEV_FABRIC_WORKSPACE) \
+                          --pipelines-path microsoft-fabric/pipelines/
+                      fi
+
+  # Staging Deployment
+  - stage: Deploy_Staging
+    displayName: 'Deploy to Staging'
+    dependsOn: Deploy_Dev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployAzureStaging
+        displayName: 'Deploy to Azure Staging'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'staging'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Create Resource Group'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az group create --name $(STAGING_RESOURCE_GROUP) --location $(AZURE_LOCATION) || true
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Init Staging'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'init'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    backendServiceArm: '$(AZURE_SERVICE_CONNECTION)'
+                    backendAzureRmResourceGroupName: '$(TERRAFORM_STATE_RG)'
+                    backendAzureRmStorageAccountName: '$(TERRAFORM_STATE_SA)'
+                    backendAzureRmContainerName: 'tfstate'
+                    backendAzureRmKey: 'staging.terraform.tfstate'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Apply Staging'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'apply'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    commandOptions: '-var="environment=staging" -auto-approve'
+                    environmentServiceNameAzureRM: '$(AZURE_SERVICE_CONNECTION)'
+
+      - deployment: DeploySynapse
+        displayName: 'Deploy to Azure Synapse'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'synapse-staging'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Deploy Synapse Artifacts'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      # Deploy notebooks
+                      if [ -d "azure-fundamentals/synapse/notebooks" ]; then
+                        for notebook in azure-fundamentals/synapse/notebooks/*.ipynb; do
+                          az synapse notebook import \
+                            --workspace-name $(SYNAPSE_WORKSPACE) \
+                            --name $(basename $notebook .ipynb) \
+                            --file @$notebook || true
+                        done
+                      fi
+                      
+                      # Deploy pipelines
+                      if [ -d "azure-fundamentals/synapse/pipelines" ]; then
+                        for pipeline in azure-fundamentals/synapse/pipelines/*.json; do
+                          az synapse pipeline create \
+                            --workspace-name $(SYNAPSE_WORKSPACE) \
+                            --name $(basename $pipeline .json) \
+                            --file @$pipeline || true
+                        done
+                      fi
+
+      - deployment: DeployDataFactory
+        displayName: 'Deploy to Azure Data Factory'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'adf-staging'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Deploy ADF Pipelines'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      if [ -d "azure-fundamentals/adf/pipelines" ]; then
+                        for pipeline in azure-fundamentals/adf/pipelines/*.json; do
+                          az datafactory pipeline create \
+                            --factory-name $(ADF_NAME) \
+                            --resource-group $(STAGING_RESOURCE_GROUP) \
+                            --name $(basename $pipeline .json) \
+                            --pipeline @$pipeline || true
+                        done
+                      fi
+
+  # Production Deployment
+  - stage: Deploy_Production
+    displayName: 'Deploy to Production'
+    dependsOn: Deploy_Staging
+    condition: and(succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['Build.SourceBranch'], 'refs/heads/main')))
+    jobs:
+      - deployment: DeployAzureProduction
+        displayName: 'Deploy to Azure Production'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Create Production Resources'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az group create --name $(PROD_RESOURCE_GROUP) --location $(AZURE_LOCATION) || true
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Init Production'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'init'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    backendServiceArm: '$(AZURE_SERVICE_CONNECTION)'
+                    backendAzureRmResourceGroupName: '$(TERRAFORM_STATE_RG)'
+                    backendAzureRmStorageAccountName: '$(TERRAFORM_STATE_SA)'
+                    backendAzureRmContainerName: 'tfstate'
+                    backendAzureRmKey: 'prod.terraform.tfstate'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Apply Production'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'apply'
+                    workingDirectory: '$(Pipeline.Workspace)/drop/cicd/terraform/azure-infrastructure'
+                    commandOptions: '-var="environment=prod" -auto-approve'
+                    environmentServiceNameAzureRM: '$(AZURE_SERVICE_CONNECTION)'
+
+                - task: AzureAppServiceManage@0
+                  displayName: 'Swap Slots'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    WebAppName: '$(PROD_WEBAPP_NAME)'
+                    ResourceGroupName: '$(PROD_RESOURCE_GROUP)'
+                    SourceSlot: 'staging'
+                    SwapWithProduction: true
+
+      - deployment: DeployFabricProduction
+        displayName: 'Deploy to Fabric Production'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'fabric-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: '$(pythonVersion)'
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy to Production Fabric Workspace'
+                  inputs:
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      pip install azure-identity msfabricpysdkcore
+                      
+                      python scripts/deploy_fabric_notebooks.py \
+                        --workspace $(PROD_FABRIC_WORKSPACE) \
+                        --environment prod \
+                        --notebooks-path microsoft-fabric/
+
+      - deployment: DeployDatabricks
+        displayName: 'Deploy to Databricks'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'databricks-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: '$(pythonVersion)'
+
+                - script: |
+                    pip install databricks-cli
+                    
+                    # Configure Databricks CLI
+                    echo "[DEFAULT]" > ~/.databrickscfg
+                    echo "host = $(DATABRICKS_HOST)" >> ~/.databrickscfg
+                    echo "token = $(DATABRICKS_TOKEN)" >> ~/.databrickscfg
+                    
+                    # Deploy notebooks
+                    if [ -d "spark-advanced/notebooks" ]; then
+                      databricks workspace import_dir \
+                        spark-advanced/notebooks \
+                        /Production/spark-advanced \
+                        --overwrite
+                    fi
+                    
+                    # Deploy jobs
+                    if [ -f "databricks-jobs.json" ]; then
+                      databricks jobs create --json-file databricks-jobs.json || true
+                    fi
+                  displayName: 'Deploy to Databricks'
+
+  # Smoke Tests
+  - stage: PostDeploy_Validation
+    displayName: 'Post-Deployment Validation'
+    dependsOn: Deploy_Production
+    condition: succeeded()
+    jobs:
+      - job: SmokeTests
+        displayName: 'Run Smoke Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install requests pytest
+              pytest tests/smoke/ -v
+            displayName: 'Execute Smoke Tests'
+
+          - task: AzureCLI@2
+            displayName: 'Health Check'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                if [ -n "$(HEALTH_CHECK_URL)" ]; then
+                  curl -f $(HEALTH_CHECK_URL) || exit 1
+                fi
+
+      - job: MonitoringSetup
+        displayName: 'Configure Monitoring'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Setup Application Insights'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Enable Application Insights
+                az monitor app-insights component create \
+                  --app $(PROD_WEBAPP_NAME)-insights \
+                  --location $(AZURE_LOCATION) \
+                  --resource-group $(PROD_RESOURCE_GROUP) \
+                  --application-type web || true
+                
+                # Create alerts
+                az monitor metrics alert create \
+                  --name high-cpu-alert \
+                  --resource-group $(PROD_RESOURCE_GROUP) \
+                  --scopes $(PROD_WEBAPP_NAME) \
+                  --condition "avg Percentage CPU > 80" \
+                  --description "Alert when CPU exceeds 80%" || true

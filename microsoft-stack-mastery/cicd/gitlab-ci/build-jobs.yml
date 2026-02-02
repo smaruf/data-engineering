@@ -1,0 +1,242 @@
+# Build Jobs for GitLab CI
+
+# Java Build Jobs
+build:java:
+  stage: build
+  image: maven:3.9-eclipse-temurin-17
+  script:
+    - echo "Building Java projects..."
+    - mvn clean compile -B -DskipTests
+    - mvn package -B -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+      - java-fundamentals/target/*.jar
+    expire_in: 1 week
+  cache:
+    key: maven-$CI_COMMIT_REF_SLUG
+    paths:
+      - .m2/repository/
+  only:
+    - merge_requests
+    - main
+    - develop
+    - tags
+
+build:java-test:
+  stage: test
+  image: maven:3.9-eclipse-temurin-17
+  needs:
+    - build:java
+  script:
+    - echo "Running Java unit tests..."
+    - mvn test -B
+    - mvn verify -B
+  artifacts:
+    reports:
+      junit:
+        - target/surefire-reports/TEST-*.xml
+        - target/failsafe-reports/TEST-*.xml
+    paths:
+      - target/surefire-reports/
+      - target/site/jacoco/
+    expire_in: 1 week
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Python Build Jobs
+build:python:
+  stage: build
+  image: python:3.11-slim
+  before_script:
+    - pip install --upgrade pip setuptools wheel
+  script:
+    - echo "Building Python packages..."
+    - pip install -r requirements.txt
+    - |
+      if [ -f setup.py ]; then
+        python setup.py sdist bdist_wheel
+      fi
+    - pip install build
+    - |
+      for dir in microsoft-fabric azure-fundamentals spark-advanced; do
+        if [ -d "$dir" ] && [ -f "$dir/requirements.txt" ]; then
+          echo "Installing dependencies for $dir"
+          pip install -r $dir/requirements.txt
+        fi
+      done
+  artifacts:
+    paths:
+      - dist/
+      - "*.egg-info"
+    expire_in: 1 week
+  cache:
+    key: python-$CI_COMMIT_REF_SLUG
+    paths:
+      - .cache/pip/
+  only:
+    - merge_requests
+    - main
+    - develop
+    - tags
+
+build:python-test:
+  stage: test
+  image: python:3.11-slim
+  needs:
+    - build:python
+  before_script:
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    - pip install pytest pytest-cov pytest-xdist pytest-timeout
+  script:
+    - echo "Running Python unit tests..."
+    - pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-report=term -n auto
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+      - .coverage
+    expire_in: 1 week
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Docker Build Jobs
+build:docker:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - echo "Building Docker images..."
+    - |
+      if [ -f Dockerfile ]; then
+        docker build -t $IMAGE_TAG .
+        docker tag $IMAGE_TAG $CI_REGISTRY_IMAGE:latest
+        docker push $IMAGE_TAG
+        docker push $CI_REGISTRY_IMAGE:latest
+      fi
+  only:
+    - main
+    - develop
+    - tags
+
+# Spark Application Build
+build:spark-apps:
+  stage: build
+  image: maven:3.9-eclipse-temurin-17
+  script:
+    - echo "Building Spark applications..."
+    - |
+      if [ -d "spark-advanced" ]; then
+        cd spark-advanced
+        if [ -f pom.xml ]; then
+          mvn clean package -DskipTests
+        fi
+      fi
+  artifacts:
+    paths:
+      - spark-advanced/target/*.jar
+    expire_in: 1 week
+  only:
+    - merge_requests
+    - main
+    - develop
+    - tags
+
+# Fabric Notebooks Validation
+build:fabric-notebooks:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - echo "Validating Fabric notebooks..."
+    - pip install nbformat nbconvert jupyter
+    - |
+      find microsoft-fabric -name "*.ipynb" | while read notebook; do
+        echo "Validating $notebook"
+        jupyter nbconvert --to notebook --execute --inplace "$notebook" || true
+      done
+  artifacts:
+    paths:
+      - microsoft-fabric/**/*.ipynb
+    expire_in: 3 days
+  allow_failure: true
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Code Quality Analysis
+build:sonarqube:
+  stage: build
+  image: sonarsource/sonar-scanner-cli:latest
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+  cache:
+    key: sonar-$CI_COMMIT_REF_SLUG
+    paths:
+      - .sonar/cache
+  script:
+    - |
+      sonar-scanner \
+        -Dsonar.projectKey=microsoft-stack-mastery \
+        -Dsonar.sources=. \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.python.coverage.reportPaths=coverage.xml \
+        -Dsonar.java.binaries=target/classes \
+        -Dsonar.exclusions=**/tests/**,**/venv/**,**/__pycache__/**
+  allow_failure: true
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Build documentation
+build:docs:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - pip install sphinx sphinx-rtd-theme
+    - |
+      if [ -d "docs" ]; then
+        cd docs
+        make html || sphinx-build -b html source build/html
+      fi
+  artifacts:
+    paths:
+      - docs/build/html/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+
+# Terraform Validation
+build:terraform-validate:
+  stage: build
+  image: hashicorp/terraform:latest
+  script:
+    - echo "Validating Terraform configurations..."
+    - cd cicd/terraform/azure-infrastructure
+    - terraform init -backend=false
+    - terraform validate
+    - terraform fmt -check -recursive
+  only:
+    - merge_requests
+    - main
+    - develop

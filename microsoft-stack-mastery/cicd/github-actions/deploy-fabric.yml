@@ -1,0 +1,301 @@
+name: Deploy to Microsoft Fabric
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      workspace_name:
+        description: 'Fabric workspace name'
+        required: true
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'microsoft-fabric/**'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy-fabric-notebooks:
+    name: Deploy Fabric Notebooks
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Fabric SDK
+        run: |
+          pip install azure-identity msfabricpysdkcore
+          pip install -r microsoft-fabric/requirements.txt
+
+      - name: Validate notebooks
+        run: |
+          pip install nbformat nbconvert jupyter
+          find microsoft-fabric -name "*.ipynb" | while read notebook; do
+            echo "Validating $notebook"
+            jupyter nbconvert --to notebook --execute --stdout "$notebook" > /dev/null || true
+          done
+
+      - name: Deploy notebooks to Fabric
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.DEV_FABRIC_WORKSPACE }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'development' }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          python scripts/deploy_fabric_notebooks.py \
+            --workspace "$FABRIC_WORKSPACE" \
+            --environment "$ENVIRONMENT" \
+            --notebooks-path microsoft-fabric/
+
+  deploy-fabric-pipelines:
+    name: Deploy Fabric Pipelines
+    runs-on: ubuntu-latest
+    needs: deploy-fabric-notebooks
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install dependencies
+        run: |
+          pip install azure-identity msfabricpysdkcore
+
+      - name: Deploy Fabric pipelines
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.DEV_FABRIC_WORKSPACE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          if [ -d "microsoft-fabric/pipelines" ]; then
+            python scripts/deploy_fabric_pipelines.py \
+              --workspace "$FABRIC_WORKSPACE" \
+              --pipelines-path microsoft-fabric/pipelines/
+          fi
+
+  deploy-semantic-models:
+    name: Deploy Semantic Models
+    runs-on: ubuntu-latest
+    needs: deploy-fabric-pipelines
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    if: github.event.inputs.environment == 'production' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install dependencies
+        run: |
+          pip install azure-identity msfabricpysdkcore
+
+      - name: Deploy semantic models
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.PROD_FABRIC_WORKSPACE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          if [ -d "microsoft-fabric/semantic-models" ]; then
+            python scripts/deploy_semantic_models.py \
+              --workspace "$FABRIC_WORKSPACE" \
+              --models-path microsoft-fabric/semantic-models/
+          fi
+
+  deploy-lakehouses:
+    name: Deploy Lakehouse Configurations
+    runs-on: ubuntu-latest
+    needs: deploy-fabric-notebooks
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install dependencies
+        run: |
+          pip install azure-identity msfabricpysdkcore
+
+      - name: Create/Update Lakehouses
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.DEV_FABRIC_WORKSPACE }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'development' }}
+        run: |
+          python scripts/deploy_lakehouses.py \
+            --workspace "$FABRIC_WORKSPACE" \
+            --environment "$ENVIRONMENT" \
+            --config microsoft-fabric/lakehouse-config.yaml
+
+  post-deployment-validation:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: 
+      - deploy-fabric-notebooks
+      - deploy-fabric-pipelines
+      - deploy-lakehouses
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest requests azure-identity
+
+      - name: Run smoke tests
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.DEV_FABRIC_WORKSPACE }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'development' }}
+        run: |
+          if [ -d "tests/fabric-smoke" ]; then
+            pytest tests/fabric-smoke/ -v
+          fi
+
+      - name: Verify deployment
+        env:
+          FABRIC_WORKSPACE: ${{ github.event.inputs.workspace_name || secrets.DEV_FABRIC_WORKSPACE }}
+        run: |
+          python scripts/verify_fabric_deployment.py \
+            --workspace "$FABRIC_WORKSPACE"
+
+  notify-deployment:
+    name: Send Deployment Notification
+    runs-on: ubuntu-latest
+    needs: post-deployment-validation
+    if: always()
+    steps:
+      - name: Send Teams notification
+        if: env.TEAMS_WEBHOOK_URL != ''
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ needs.post-deployment-validation.result }}"
+          COLOR="00FF00"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="FF0000"
+          fi
+          
+          curl -H "Content-Type: application/json" -d "{
+            \"@type\": \"MessageCard\",
+            \"@context\": \"https://schema.org/extensions\",
+            \"summary\": \"Fabric Deployment $STATUS\",
+            \"themeColor\": \"$COLOR\",
+            \"title\": \"Microsoft Fabric Deployment - $STATUS\",
+            \"sections\": [{
+              \"activityTitle\": \"Deployment to ${{ github.event.inputs.environment || 'development' }}\",
+              \"facts\": [
+                {\"name\": \"Status\", \"value\": \"$STATUS\"},
+                {\"name\": \"Workspace\", \"value\": \"${{ github.event.inputs.workspace_name }}\"},
+                {\"name\": \"Triggered by\", \"value\": \"${{ github.actor }}\"},
+                {\"name\": \"Branch\", \"value\": \"${{ github.ref }}\"}
+              ]
+            }],
+            \"potentialAction\": [{
+              \"@type\": \"OpenUri\",
+              \"name\": \"View Workflow\",
+              \"targets\": [{
+                \"os\": \"default\",
+                \"uri\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+              }]
+            }]
+          }" "$TEAMS_WEBHOOK_URL"
+
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: failure() && github.event.inputs.environment == 'production'
+    needs: post-deployment-validation
+    environment: production-rollback
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Rollback to previous version
+        env:
+          FABRIC_WORKSPACE: ${{ secrets.PROD_FABRIC_WORKSPACE }}
+        run: |
+          echo "Rolling back to previous version..."
+          # Get previous commit
+          PREVIOUS_COMMIT=$(git rev-parse HEAD~1)
+          git checkout $PREVIOUS_COMMIT
+          
+          # Redeploy previous version
+          python scripts/deploy_fabric_notebooks.py \
+            --workspace "$FABRIC_WORKSPACE" \
+            --environment production \
+            --notebooks-path microsoft-fabric/

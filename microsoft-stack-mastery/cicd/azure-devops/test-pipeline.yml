@@ -1,0 +1,324 @@
+stages:
+  - stage: Test
+    displayName: 'Test Stage'
+    dependsOn: Build
+    jobs:
+      # Java Unit Tests
+      - job: JavaTests
+        displayName: 'Java Unit Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Install Java $(javaVersion)'
+            inputs:
+              versionSpec: '$(javaVersion)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Cache@2
+            displayName: 'Cache Maven packages'
+            inputs:
+              key: 'maven | "$(Agent.OS)" | **/pom.xml'
+              path: $(Pipeline.Workspace)/.m2/repository
+
+          - task: Maven@3
+            displayName: 'Run Java Unit Tests'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: '$(mavenOptions) -B'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: 'Java Unit Tests'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '$(javaVersion)'
+              mavenVersionOption: 'Default'
+
+          - task: Maven@3
+            displayName: 'Run Java Integration Tests'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'verify'
+              options: '$(mavenOptions) -B'
+              publishJUnitResults: true
+              testResultsFiles: '**/failsafe-reports/TEST-*.xml'
+              testRunTitle: 'Java Integration Tests'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '$(javaVersion)'
+              mavenVersionOption: 'Default'
+            condition: succeededOrFailed()
+
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish Java Code Coverage'
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/target/site/jacoco/jacoco.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/**/target/site/jacoco'
+            condition: succeededOrFailed()
+
+      # Python Unit Tests
+      - job: PythonTests
+        displayName: 'Python Unit Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Use Python $(pythonVersion)'
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | requirements.txt'
+              path: $(Pipeline.Workspace)/.pip
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install --cache-dir $(Pipeline.Workspace)/.pip -r requirements.txt
+              pip install pytest pytest-cov pytest-xdist pytest-timeout pytest-mock
+            displayName: 'Install test dependencies'
+
+          - script: |
+              pytest tests/unit/ -v \
+                --cov=. \
+                --cov-report=xml \
+                --cov-report=html \
+                --cov-report=term \
+                --junitxml=test-results.xml \
+                -n auto
+            displayName: 'Run Python Unit Tests'
+            continueOnError: true
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Python Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results.xml'
+              testRunTitle: 'Python Unit Tests'
+            condition: succeededOrFailed()
+
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish Python Code Coverage'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/htmlcov'
+            condition: succeededOrFailed()
+
+      # Python Integration Tests
+      - job: PythonIntegrationTests
+        displayName: 'Python Integration Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        services:
+          postgres: postgres:14
+          redis: redis:7
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install --upgrade pip
+              pip install -r requirements.txt
+              pip install pytest pytest-asyncio
+            displayName: 'Install dependencies'
+
+          - script: |
+              export POSTGRES_HOST=localhost
+              export POSTGRES_DB=test_db
+              export POSTGRES_USER=postgres
+              export POSTGRES_PASSWORD=postgres
+              export REDIS_HOST=localhost
+              
+              pytest tests/integration/ -v --junitxml=integration-test-results.xml
+            displayName: 'Run Integration Tests'
+            continueOnError: true
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Integration Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'integration-test-results.xml'
+              testRunTitle: 'Python Integration Tests'
+            condition: succeededOrFailed()
+
+      # Security Scanning
+      - job: SecurityScans
+        displayName: 'Security Scanning'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          # Python dependency scanning
+          - script: |
+              pip install safety bandit
+              safety check --json --output safety-report.json || true
+              bandit -r . -f json -o bandit-report.json || true
+            displayName: 'Python Security Scan'
+
+          # Secret scanning
+          - script: |
+              docker run --rm -v $(Build.SourcesDirectory):/src \
+                trufflesecurity/trufflehog:latest \
+                filesystem /src --json > trufflehog-report.json || true
+            displayName: 'Scan for secrets'
+
+          # Dependency vulnerability scanning
+          - task: dependency-check-build-task@6
+            displayName: 'OWASP Dependency Check'
+            inputs:
+              projectName: 'microsoft-stack-mastery'
+              scanPath: '$(Build.SourcesDirectory)'
+              format: 'HTML,JSON'
+              failOnCVSS: '7'
+            continueOnError: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Security Reports'
+            inputs:
+              pathToPublish: '$(System.DefaultWorkingDirectory)'
+              artifactName: 'security-reports'
+              publishLocation: 'Container'
+            condition: always()
+
+      # Static Code Analysis
+      - job: StaticAnalysis
+        displayName: 'Static Code Analysis'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install mypy pylint flake8
+              mypy . --ignore-missing-imports --no-strict-optional || true
+              pylint **/*.py --exit-zero > pylint-report.txt
+              flake8 . --max-line-length=100 --statistics --exit-zero > flake8-report.txt
+            displayName: 'Python Static Analysis'
+
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '$(javaVersion)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Maven@3
+            displayName: 'Java Static Analysis - Checkstyle'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'checkstyle:checkstyle'
+              options: '-B'
+              publishJUnitResults: false
+            continueOnError: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Analysis Reports'
+            inputs:
+              pathToPublish: '$(System.DefaultWorkingDirectory)'
+              artifactName: 'analysis-reports'
+            condition: always()
+
+      # Performance Tests
+      - job: PerformanceTests
+        displayName: 'Performance Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install -r requirements.txt
+              pip install locust pytest-benchmark
+              
+              if [ -d "tests/performance" ]; then
+                pytest tests/performance/ -v --benchmark-only
+              fi
+            displayName: 'Run Performance Tests'
+            continueOnError: true
+
+      # Load Tests
+      - job: LoadTests
+        displayName: 'Load Testing'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install locust
+              
+              if [ -f "tests/load/locustfile.py" ]; then
+                locust -f tests/load/locustfile.py \
+                  --headless \
+                  --users 100 \
+                  --spawn-rate 10 \
+                  --run-time 60s \
+                  --html=load-test-report.html
+              fi
+            displayName: 'Run Load Tests'
+            continueOnError: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Load Test Report'
+            inputs:
+              pathToPublish: 'load-test-report.html'
+              artifactName: 'load-test-reports'
+            condition: always()
+
+      # Contract Tests
+      - job: ContractTests
+        displayName: 'API Contract Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/develop')))
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install pact-python requests
+              
+              if [ -d "tests/contract" ]; then
+                pytest tests/contract/ -v
+              fi
+            displayName: 'Run Contract Tests'
+            continueOnError: true
+
+      # Database Migration Tests
+      - job: MigrationTests
+        displayName: 'Database Migration Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        services:
+          postgres: postgres:14
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install alembic psycopg2-binary
+              
+              if [ -d "migrations" ]; then
+                export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+                alembic upgrade head
+                alembic downgrade base
+                alembic upgrade head
+              fi
+            displayName: 'Test Database Migrations'
+            continueOnError: true

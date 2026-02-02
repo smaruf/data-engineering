@@ -1,0 +1,29 @@
+# Azure Fundamentals - Python Requirements
+
+# Core Azure SDK
+azure-identity>=1.12.0
+azure-core>=1.26.0
+
+# Resource Management
+azure-mgmt-resource>=22.0.0
+azure-mgmt-storage>=21.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=23.0.0
+azure-mgmt-sql>=4.0.0
+azure-mgmt-batch>=17.0.0
+
+# Storage
+azure-storage-blob>=12.19.0
+azure-storage-file-datalake>=12.14.0
+
+# Databases
+pyodbc>=4.0.39
+azure-cosmos>=4.5.1
+
+# Compute
+azure-functions>=1.18.0
+azure-batch>=14.0.0
+
+# Utilities
+tqdm>=4.66.0
+python-dotenv>=1.0.0
