@@ -10,20 +10,20 @@ Modules:
     quality_metrics: Quality metrics calculation and tracking
 """
 
-from src.quality.validators import (
+from .validators import (
     DataValidator,
     SchemaValidator,
     ValidationRule,
     ValidationResult,
     GreatExpectationsValidator
 )
-from src.quality.profiling import (
+from .profiling import (
     DataProfiler,
     ProfileReport,
     DistributionAnalyzer,
     PatternDetector
 )
-from src.quality.quality_metrics import (
+from .quality_metrics import (
     QualityMetricsCalculator,
     QualityMetric,
     QualityReport,

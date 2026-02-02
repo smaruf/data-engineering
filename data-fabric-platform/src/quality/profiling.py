@@ -494,6 +494,8 @@ class DistributionAnalyzer:
     def _calculate_entropy(self, df: DataFrame, column: str) -> float:
         """Calculate Shannon entropy for a column"""
         try:
+            import math
+            
             total = df.count()
             if total == 0:
                 return 0.0
@@ -504,7 +506,7 @@ class DistributionAnalyzer:
             for row in value_counts:
                 p = row['count'] / total
                 if p > 0:
-                    entropy -= p * (p ** 0.5).bit_length()  # Approximate log2
+                    entropy -= p * math.log2(p)
             
             return entropy
             
