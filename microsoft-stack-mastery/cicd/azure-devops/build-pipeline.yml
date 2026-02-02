@@ -1,0 +1,291 @@
+stages:
+  - stage: Build
+    displayName: 'Build Stage'
+    jobs:
+      # Java Build
+      - job: BuildJava
+        displayName: 'Build Java Projects'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Install Java $(javaVersion)'
+            inputs:
+              versionSpec: '$(javaVersion)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Cache@2
+            displayName: 'Cache Maven packages'
+            inputs:
+              key: 'maven | "$(Agent.OS)" | **/pom.xml'
+              restoreKeys: |
+                maven | "$(Agent.OS)"
+                maven
+              path: $(Pipeline.Workspace)/.m2/repository
+
+          - task: Maven@3
+            displayName: 'Maven Clean Compile'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean compile'
+              options: '$(mavenOptions) -B'
+              publishJUnitResults: false
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '$(javaVersion)'
+              mavenVersionOption: 'Default'
+
+          - task: Maven@3
+            displayName: 'Maven Package'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'package'
+              options: '$(mavenOptions) -DskipTests -B'
+              publishJUnitResults: false
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '$(javaVersion)'
+              mavenVersionOption: 'Default'
+
+          - task: CopyFiles@2
+            displayName: 'Copy Java artifacts'
+            inputs:
+              sourceFolder: '$(System.DefaultWorkingDirectory)'
+              contents: |
+                **/target/*.jar
+                !**/target/*-sources.jar
+                !**/target/*-javadoc.jar
+              targetFolder: '$(Build.ArtifactStagingDirectory)/java'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Java artifacts'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/java'
+              artifactName: 'java-artifacts'
+              publishLocation: 'Container'
+
+      # Python Build
+      - job: BuildPython
+        displayName: 'Build Python Projects'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Use Python $(pythonVersion)'
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | requirements.txt | microsoft-fabric/requirements.txt'
+              restoreKeys: |
+                python | "$(Agent.OS)"
+                python
+              path: $(Pipeline.Workspace)/.pip
+
+          - script: |
+              python -m pip install --upgrade pip setuptools wheel
+              pip install --cache-dir $(Pipeline.Workspace)/.pip -r requirements.txt
+            displayName: 'Install Python dependencies'
+
+          - script: |
+              if [ -f microsoft-fabric/requirements.txt ]; then
+                pip install --cache-dir $(Pipeline.Workspace)/.pip -r microsoft-fabric/requirements.txt
+              fi
+            displayName: 'Install Fabric dependencies'
+
+          - script: |
+              pip install build
+              if [ -f setup.py ]; then
+                python -m build
+              fi
+            displayName: 'Build Python packages'
+            condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+
+          - task: CopyFiles@2
+            displayName: 'Copy Python artifacts'
+            inputs:
+              sourceFolder: '$(System.DefaultWorkingDirectory)'
+              contents: |
+                dist/**
+                **/*.whl
+                **/*.tar.gz
+              targetFolder: '$(Build.ArtifactStagingDirectory)/python'
+            condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Python artifacts'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/python'
+              artifactName: 'python-artifacts'
+              publishLocation: 'Container'
+            condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+
+      # Spark Applications Build
+      - job: BuildSpark
+        displayName: 'Build Spark Applications'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Install Java $(javaVersion)'
+            inputs:
+              versionSpec: '$(javaVersion)'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - task: Maven@3
+            displayName: 'Build Spark Apps'
+            inputs:
+              mavenPomFile: 'spark-advanced/pom.xml'
+              goals: 'clean package'
+              options: '-DskipTests -B'
+              publishJUnitResults: false
+            condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual'))
+
+          - task: CopyFiles@2
+            displayName: 'Copy Spark artifacts'
+            inputs:
+              sourceFolder: 'spark-advanced/target'
+              contents: '*.jar'
+              targetFolder: '$(Build.ArtifactStagingDirectory)/spark'
+            condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual'))
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Spark artifacts'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/spark'
+              artifactName: 'spark-artifacts'
+              publishLocation: 'Container'
+            condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual'))
+
+      # Docker Build
+      - job: BuildDocker
+        displayName: 'Build Docker Images'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/develop')))
+        steps:
+          - task: Docker@2
+            displayName: 'Build Docker image'
+            inputs:
+              command: 'build'
+              repository: 'microsoft-stack-mastery'
+              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+              tags: |
+                $(Build.BuildId)
+                latest
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+
+          - task: Docker@2
+            displayName: 'Push Docker image to ACR'
+            inputs:
+              command: 'push'
+              containerRegistry: '$(ACR_SERVICE_CONNECTION)'
+              repository: 'microsoft-stack-mastery'
+              tags: |
+                $(Build.BuildId)
+                latest
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+
+      # Code Quality Analysis
+      - job: CodeQuality
+        displayName: 'Code Quality Analysis'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install flake8 black pylint bandit safety
+              flake8 . --max-line-length=100 --exclude=venv,.git,__pycache__ --exit-zero
+              black --check . || true
+            displayName: 'Python Code Quality'
+
+          - task: SonarCloudPrepare@1
+            displayName: 'Prepare SonarCloud analysis'
+            inputs:
+              SonarCloud: 'SonarCloud'
+              organization: '$(SONARCLOUD_ORG)'
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: 'microsoft-stack-mastery'
+              cliProjectName: 'Microsoft Stack Mastery'
+              cliSources: '.'
+              extraProperties: |
+                sonar.python.coverage.reportPaths=coverage.xml
+                sonar.java.binaries=target/classes
+                sonar.exclusions=**/tests/**,**/venv/**,**/__pycache__/**
+
+          - task: SonarCloudAnalyze@1
+            displayName: 'Run SonarCloud analysis'
+
+          - task: SonarCloudPublish@1
+            displayName: 'Publish SonarCloud results'
+            inputs:
+              pollingTimeoutSec: '300'
+
+      # Terraform Validation
+      - job: TerraformValidate
+        displayName: 'Validate Terraform'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: TerraformInstaller@0
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - script: |
+              cd cicd/terraform/azure-infrastructure
+              terraform init -backend=false
+              terraform validate
+              terraform fmt -check -recursive
+            displayName: 'Validate Terraform configurations'
+
+      # Notebook Validation
+      - job: ValidateNotebooks
+        displayName: 'Validate Fabric Notebooks'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install nbformat nbconvert jupyter
+              find microsoft-fabric -name "*.ipynb" | while read notebook; do
+                echo "Validating $notebook"
+                jupyter nbconvert --to notebook --execute --stdout "$notebook" > /dev/null || true
+              done
+            displayName: 'Validate Jupyter notebooks'
+
+      # Documentation Build
+      - job: BuildDocs
+        displayName: 'Build Documentation'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              pip install sphinx sphinx-rtd-theme recommonmark
+              if [ -d "docs" ]; then
+                cd docs
+                make html || sphinx-build -b html source build/html
+              fi
+            displayName: 'Build Sphinx documentation'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish documentation'
+            inputs:
+              pathToPublish: 'docs/build/html'
+              artifactName: 'documentation'
+              publishLocation: 'Container'

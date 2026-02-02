@@ -1,0 +1,180 @@
+stages:
+  - validate
+  - build
+  - test
+  - security
+  - deploy
+  - post-deploy
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  PYTHON_VERSION: "3.11"
+  JAVA_VERSION: "17"
+  DOCKER_DRIVER: overlay2
+  AZURE_SUBSCRIPTION_ID: $AZURE_SUBSCRIPTION_ID
+  AZURE_RESOURCE_GROUP: $AZURE_RESOURCE_GROUP
+
+# Cache configuration for faster builds
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .m2/repository/
+    - .cache/pip/
+    - node_modules/
+
+# Include job definitions
+include:
+  - local: 'cicd/gitlab-ci/build-jobs.yml'
+  - local: 'cicd/gitlab-ci/deploy-jobs.yml'
+
+# Workflow rules
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
+
+# Pre-flight validation
+validate:code-format:
+  stage: validate
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install black flake8 isort
+    - black --check .
+    - flake8 . --max-line-length=100 --exclude=.git,__pycache__,venv
+    - isort --check-only .
+  allow_failure: true
+  only:
+    - merge_requests
+    - main
+    - develop
+
+validate:java-format:
+  stage: validate
+  image: maven:3.9-eclipse-temurin-${JAVA_VERSION}
+  script:
+    - mvn spotless:check || true
+  allow_failure: true
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Security scanning
+security:dependency-check:
+  stage: security
+  image: owasp/dependency-check:latest
+  script:
+    - >
+      /usr/share/dependency-check/bin/dependency-check.sh
+      --scan ./
+      --format HTML
+      --format JSON
+      --out ./dependency-check-report
+      --prettyPrint
+  artifacts:
+    paths:
+      - dependency-check-report/
+    expire_in: 1 week
+    when: always
+  allow_failure: true
+
+security:secrets-scan:
+  stage: security
+  image: trufflesecurity/trufflehog:latest
+  script:
+    - trufflehog filesystem . --json > secrets-scan.json || true
+  artifacts:
+    paths:
+      - secrets-scan.json
+    expire_in: 1 week
+  allow_failure: true
+
+security:container-scan:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy fs --severity HIGH,CRITICAL --format json --output trivy-report.json .
+  artifacts:
+    paths:
+      - trivy-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# Test stage jobs
+test:integration:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  services:
+    - postgres:14
+    - redis:7
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: test_user
+    POSTGRES_PASSWORD: test_pass
+  script:
+    - pip install -r requirements.txt
+    - pip install pytest pytest-cov
+    - pytest tests/integration/ --cov=. --cov-report=xml --cov-report=html
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+    expire_in: 1 week
+  only:
+    - merge_requests
+    - main
+    - develop
+
+test:performance:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install -r requirements.txt
+    - pip install locust
+    - echo "Running performance tests..."
+    - python -m pytest tests/performance/ -v || true
+  allow_failure: true
+  only:
+    - main
+    - develop
+
+# Post-deployment validation
+post-deploy:smoke-tests:
+  stage: post-deploy
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install requests pytest
+    - pytest tests/smoke/ -v
+  only:
+    - main
+  when: manual
+  needs:
+    - deploy:fabric-dev
+    - deploy:azure-dev
+
+post-deploy:health-check:
+  stage: post-deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      if [ -n "$HEALTH_CHECK_URL" ]; then
+        curl -f $HEALTH_CHECK_URL || exit 1
+      fi
+  only:
+    - main
+  when: manual
+  allow_failure: true
+
+# Cleanup job
+cleanup:artifacts:
+  stage: .post
+  image: alpine:latest
+  script:
+    - echo "Cleaning up temporary artifacts..."
+  when: always

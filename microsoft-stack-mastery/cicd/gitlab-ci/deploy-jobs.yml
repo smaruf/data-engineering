@@ -1,0 +1,364 @@
+# Deployment Jobs for GitLab CI
+
+# Azure Infrastructure Deployment
+.deploy_azure_base:
+  image: mcr.microsoft.com/azure-cli:latest
+  before_script:
+    - az --version
+    - az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+    - az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+deploy:azure-dev:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: development
+    url: https://$DEV_RESOURCE_GROUP.azurewebsites.net
+    on_stop: destroy:azure-dev
+  variables:
+    ENVIRONMENT: "dev"
+    RESOURCE_GROUP: $DEV_RESOURCE_GROUP
+    LOCATION: "eastus"
+  script:
+    - echo "Deploying to Azure Development environment..."
+    - |
+      # Create resource group if not exists
+      az group create --name $RESOURCE_GROUP --location $LOCATION || true
+      
+      # Deploy using Terraform
+      cd cicd/terraform/azure-infrastructure
+      terraform init
+      terraform workspace select $ENVIRONMENT || terraform workspace new $ENVIRONMENT
+      terraform plan -var="environment=$ENVIRONMENT" -out=tfplan
+      terraform apply -auto-approve tfplan
+      
+      # Deploy applications
+      echo "Deploying Python applications to Azure App Service..."
+      if [ -f "../../../dist/"*.whl ]; then
+        az webapp deployment source config-zip \
+          --resource-group $RESOURCE_GROUP \
+          --name ${RESOURCE_GROUP}-webapp \
+          --src dist/*.whl || true
+      fi
+  artifacts:
+    paths:
+      - cicd/terraform/azure-infrastructure/terraform.tfstate
+      - cicd/terraform/azure-infrastructure/tfplan
+    expire_in: 1 week
+  needs:
+    - build:python
+    - build:java
+  only:
+    - develop
+  when: manual
+
+deploy:azure-staging:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: staging
+    url: https://$STAGING_RESOURCE_GROUP.azurewebsites.net
+    on_stop: destroy:azure-staging
+  variables:
+    ENVIRONMENT: "staging"
+    RESOURCE_GROUP: $STAGING_RESOURCE_GROUP
+    LOCATION: "eastus"
+  script:
+    - echo "Deploying to Azure Staging environment..."
+    - |
+      az group create --name $RESOURCE_GROUP --location $LOCATION || true
+      
+      cd cicd/terraform/azure-infrastructure
+      terraform init
+      terraform workspace select $ENVIRONMENT || terraform workspace new $ENVIRONMENT
+      terraform plan -var="environment=$ENVIRONMENT" -out=tfplan
+      terraform apply -auto-approve tfplan
+  artifacts:
+    paths:
+      - cicd/terraform/azure-infrastructure/terraform.tfstate
+    expire_in: 1 week
+  needs:
+    - build:python
+    - build:java
+    - deploy:azure-dev
+  only:
+    - main
+  when: manual
+
+deploy:azure-prod:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: production
+    url: https://$PROD_RESOURCE_GROUP.azurewebsites.net
+  variables:
+    ENVIRONMENT: "prod"
+    RESOURCE_GROUP: $PROD_RESOURCE_GROUP
+    LOCATION: "eastus"
+  script:
+    - echo "Deploying to Azure Production environment..."
+    - |
+      az group create --name $RESOURCE_GROUP --location $LOCATION || true
+      
+      cd cicd/terraform/azure-infrastructure
+      terraform init
+      terraform workspace select $ENVIRONMENT || terraform workspace new $ENVIRONMENT
+      terraform plan -var="environment=$ENVIRONMENT" -out=tfplan
+      
+      # Require manual approval for production
+      echo "Review terraform plan before applying..."
+      terraform apply -auto-approve tfplan
+  artifacts:
+    paths:
+      - cicd/terraform/azure-infrastructure/terraform.tfstate
+    expire_in: 1 month
+  needs:
+    - build:python
+    - build:java
+    - deploy:azure-staging
+  only:
+    - tags
+    - main
+  when: manual
+
+# Microsoft Fabric Deployment
+.deploy_fabric_base:
+  image: mcr.microsoft.com/azure-cli:latest
+  before_script:
+    - az --version
+    - az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+    - pip install azure-identity msfabricpysdkcore
+
+deploy:fabric-dev:
+  extends: .deploy_fabric_base
+  stage: deploy
+  environment:
+    name: fabric-development
+  variables:
+    ENVIRONMENT: "dev"
+    FABRIC_WORKSPACE: $DEV_FABRIC_WORKSPACE
+  script:
+    - echo "Deploying to Microsoft Fabric Development workspace..."
+    - |
+      # Deploy notebooks
+      echo "Deploying Fabric notebooks..."
+      python scripts/deploy_fabric_notebooks.py \
+        --workspace $FABRIC_WORKSPACE \
+        --environment $ENVIRONMENT \
+        --notebooks-path microsoft-fabric/
+      
+      # Deploy data pipelines
+      echo "Deploying Fabric pipelines..."
+      if [ -d "microsoft-fabric/pipelines" ]; then
+        python scripts/deploy_fabric_pipelines.py \
+          --workspace $FABRIC_WORKSPACE \
+          --pipelines-path microsoft-fabric/pipelines/
+      fi
+      
+      # Deploy semantic models
+      echo "Deploying semantic models..."
+      if [ -d "microsoft-fabric/semantic-models" ]; then
+        python scripts/deploy_semantic_models.py \
+          --workspace $FABRIC_WORKSPACE \
+          --models-path microsoft-fabric/semantic-models/
+      fi
+  needs:
+    - build:python
+    - build:fabric-notebooks
+  only:
+    - develop
+  when: manual
+
+deploy:fabric-prod:
+  extends: .deploy_fabric_base
+  stage: deploy
+  environment:
+    name: fabric-production
+  variables:
+    ENVIRONMENT: "prod"
+    FABRIC_WORKSPACE: $PROD_FABRIC_WORKSPACE
+  script:
+    - echo "Deploying to Microsoft Fabric Production workspace..."
+    - |
+      python scripts/deploy_fabric_notebooks.py \
+        --workspace $FABRIC_WORKSPACE \
+        --environment $ENVIRONMENT \
+        --notebooks-path microsoft-fabric/
+      
+      if [ -d "microsoft-fabric/pipelines" ]; then
+        python scripts/deploy_fabric_pipelines.py \
+          --workspace $FABRIC_WORKSPACE \
+          --pipelines-path microsoft-fabric/pipelines/
+      fi
+  needs:
+    - build:python
+    - build:fabric-notebooks
+    - deploy:fabric-dev
+  only:
+    - main
+    - tags
+  when: manual
+
+# Synapse Analytics Deployment
+deploy:synapse:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: synapse-$ENVIRONMENT
+  variables:
+    SYNAPSE_WORKSPACE: $SYNAPSE_WORKSPACE_NAME
+  script:
+    - echo "Deploying to Azure Synapse Analytics..."
+    - |
+      # Deploy Synapse notebooks
+      if [ -d "azure-fundamentals/synapse/notebooks" ]; then
+        az synapse notebook import \
+          --workspace-name $SYNAPSE_WORKSPACE \
+          --name notebooks \
+          --file @azure-fundamentals/synapse/notebooks/*.ipynb || true
+      fi
+      
+      # Deploy Synapse pipelines
+      if [ -d "azure-fundamentals/synapse/pipelines" ]; then
+        for pipeline in azure-fundamentals/synapse/pipelines/*.json; do
+          az synapse pipeline create \
+            --workspace-name $SYNAPSE_WORKSPACE \
+            --name $(basename $pipeline .json) \
+            --file @$pipeline || true
+        done
+      fi
+      
+      # Deploy Spark job definitions
+      if [ -f "spark-advanced/target/*.jar" ]; then
+        az synapse spark job-definition create \
+          --workspace-name $SYNAPSE_WORKSPACE \
+          --name spark-batch-job \
+          --file @spark-advanced/target/*.jar || true
+      fi
+  needs:
+    - build:python
+    - build:spark-apps
+  only:
+    - main
+    - develop
+  when: manual
+
+# Azure Data Factory Deployment
+deploy:adf:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: adf-$ENVIRONMENT
+  variables:
+    ADF_NAME: $ADF_FACTORY_NAME
+  script:
+    - echo "Deploying to Azure Data Factory..."
+    - |
+      # Deploy ADF pipelines
+      if [ -d "azure-fundamentals/adf/pipelines" ]; then
+        for pipeline in azure-fundamentals/adf/pipelines/*.json; do
+          az datafactory pipeline create \
+            --factory-name $ADF_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --name $(basename $pipeline .json) \
+            --pipeline @$pipeline || true
+        done
+      fi
+      
+      # Deploy linked services
+      if [ -d "azure-fundamentals/adf/linkedServices" ]; then
+        for service in azure-fundamentals/adf/linkedServices/*.json; do
+          az datafactory linked-service create \
+            --factory-name $ADF_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --name $(basename $service .json) \
+            --properties @$service || true
+        done
+      fi
+  needs:
+    - deploy:azure-dev
+  only:
+    - main
+    - develop
+  when: manual
+
+# Databricks Deployment
+deploy:databricks:
+  image: databricksruntime/standard:latest
+  stage: deploy
+  environment:
+    name: databricks-$ENVIRONMENT
+  variables:
+    DATABRICKS_HOST: $DATABRICKS_WORKSPACE_URL
+    DATABRICKS_TOKEN: $DATABRICKS_ACCESS_TOKEN
+  script:
+    - echo "Deploying to Databricks..."
+    - |
+      pip install databricks-cli
+      
+      # Configure Databricks CLI
+      echo "[DEFAULT]" > ~/.databrickscfg
+      echo "host = $DATABRICKS_HOST" >> ~/.databrickscfg
+      echo "token = $DATABRICKS_TOKEN" >> ~/.databrickscfg
+      
+      # Deploy notebooks
+      if [ -d "spark-advanced/notebooks" ]; then
+        databricks workspace import_dir \
+          spark-advanced/notebooks \
+          /Workspace/Production/spark-advanced \
+          --overwrite
+      fi
+      
+      # Create job clusters
+      databricks jobs create --json-file databricks-jobs.json || true
+  needs:
+    - build:spark-apps
+  only:
+    - main
+    - develop
+  when: manual
+
+# Cleanup/Destroy Jobs
+destroy:azure-dev:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: development
+    action: stop
+  variables:
+    ENVIRONMENT: "dev"
+    RESOURCE_GROUP: $DEV_RESOURCE_GROUP
+  script:
+    - echo "Destroying Azure Development environment..."
+    - |
+      cd cicd/terraform/azure-infrastructure
+      terraform init
+      terraform workspace select $ENVIRONMENT
+      terraform destroy -auto-approve -var="environment=$ENVIRONMENT"
+      
+      # Remove resource group
+      az group delete --name $RESOURCE_GROUP --yes --no-wait
+  when: manual
+  only:
+    - develop
+
+destroy:azure-staging:
+  extends: .deploy_azure_base
+  stage: deploy
+  environment:
+    name: staging
+    action: stop
+  variables:
+    ENVIRONMENT: "staging"
+    RESOURCE_GROUP: $STAGING_RESOURCE_GROUP
+  script:
+    - echo "Destroying Azure Staging environment..."
+    - |
+      cd cicd/terraform/azure-infrastructure
+      terraform init
+      terraform workspace select $ENVIRONMENT
+      terraform destroy -auto-approve -var="environment=$ENVIRONMENT"
+      az group delete --name $RESOURCE_GROUP --yes --no-wait
+  when: manual
+  only:
+    - main
